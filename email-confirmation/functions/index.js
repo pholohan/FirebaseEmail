@@ -13,51 +13,80 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-'use strict';
+ 'use strict';
 
-const functions = require('firebase-functions');
-const nodemailer = require('nodemailer');
-// Configure the email transport using the default SMTP transport and a GMail account.
-// For other types of transports such as Sendgrid see https://nodemailer.com/transports/
-// TODO: Configure the `gmail.email` and `gmail.password` Google Cloud environment variables.
-const gmailEmail = functions.config().gmail.email;
-const gmailPassword = functions.config().gmail.password;
-const mailTransport = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: gmailEmail,
-    pass: gmailPassword,
-  },
-});
+ const functions = require('firebase-functions');
+ const nodemailer = require('nodemailer');
+ // Configure the email transport using the default SMTP transport and a GMail account.
+ // For other types of transports such as Sendgrid see https://nodemailer.com/transports/
+ // TODO: Configure the `gmail.email` and `gmail.password` Google Cloud environment variables.
+ const gmailEmail = functions.config().gmail.email;
+ const gmailPassword = functions.config().gmail.password;
+ const mailTransport = nodemailer.createTransport({
+   service: 'gmail',
+   auth: {
+     user: gmailEmail,
+     pass: gmailPassword,
+   },
+ });
+ 
+ // Sends an email confirmation when a user changes his mailing list subscription.
+ exports.sendEmailConfirmation = functions.database.ref('/users/{uid}/bookings/{fbid}').onCreate((snapshot, context) => {
+ 
+   const val = snapshot.val();
+   functions.logger.log('Data Change',val)
+ 
+   const mailOptions = {
+     from: '"Desk Request" <noreply@deskrequest.com>',
+     to:  val.email
+   };
 
-// Sends an email confirmation when a user changes his mailing list subscription.
-exports.sendEmailConfirmation = functions.database.ref('/users/{uid}').onWrite(async (change) => {
-  // Early exit if the 'subscribedToMailingList' field has not changed
-  if (change.after.child('subscribedToMailingList').val() === change.before.child('subscribedToMailingList').val()) {
-    return null;
-  }
+   const bookingref = val.dbookid
+ 
+    // Building Email message.
+   mailOptions.subject = 'Desk Request Booking Confirmation ' + val.dbookid;
+   mailOptions.text = 'Thanks you for your desk booking. Your booking reference is: ' + val.dbookid +
+                      '\nDesk Booked: ' + val.deskid +
+                      '\nDate: ' + val.d_date +
+                      '\nDuration:  ' + val.d_duration +
+                      '\n\n\nRegards \nThe Desk Request Booking Team'
+   
+   try {
+     mailTransport.sendMail(mailOptions);
+     functions.logger.log('Confirmation email sent to:', val.email);
+   } catch(error) {
+     functions.logger.error(
+       'There was an error while sending the email:',
+       error
+     );
+   }
+   return null;
+ });
 
-  const val = change.after.val();
+ exports.sendRoomEmailConfirmation = functions.database.ref('/users/{uid}/roombookings/{fbid}').onCreate((snapshot, context) => {
+ 
+  const val = snapshot.val();
+  functions.logger.log('Data Change',val)
 
   const mailOptions = {
-    from: '"Spammy Corp." <noreply@firebase.com>',
-    to: val.email,
+    from: '"Desk Request" <noreply@deskrequest.com>',
+    to:  val.email
   };
 
-  const subscribed = val.subscribedToMailingList;
+  const bookingref = val.rbookid
 
-  // Building Email message.
-  mailOptions.subject = subscribed ? 'Thanks and Welcome!' : 'Sad to see you go :`(';
-  mailOptions.text = subscribed ?
-      'Thanks you for subscribing to our newsletter. You will receive our next weekly newsletter.' :
-      'I hereby confirm that I will stop sending you the newsletter.';
+   // Building Email message.
+  mailOptions.subject = 'Desk Request Booking Confirmation ' + val.rbookid;
+  mailOptions.text = 'Thanks you for your Room booking. Your booking reference is: ' + val.rbookid +
+                     '\nRoom Booked: ' + val.roomname +
+                     '\nRoom Type: ' + val.roomtype +
+                     '\nDate: ' + val.d_date +
+                     '\nDuration:  ' + val.d_duration +
+                     '\n\n\nRegards \nThe Desk Request Booking Team'
   
   try {
-    await mailTransport.sendMail(mailOptions);
-    functions.logger.log(
-      `New ${subscribed ? '' : 'un'}subscription confirmation email sent to:`,
-      val.email
-    );
+    mailTransport.sendMail(mailOptions);
+    functions.logger.log('Confirmation email sent to:', val.email);
   } catch(error) {
     functions.logger.error(
       'There was an error while sending the email:',
